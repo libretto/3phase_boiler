@@ -14,6 +14,7 @@
 #define btnRIGHT  0xFFC23D
 #define btnMODE   0xFF629D
 #define btnREPEAT 0xFFFFFFFF
+#define btnORDER  0xFFE01F
 
 #define IR_BUS 2
 #define ONE_WIRE_BUS 4
@@ -135,7 +136,7 @@ void print_temperature() {
   lcd.setCursor(0, 0);           // move cursor to second line "1" and 9 spaces over
   for (int i = 0; i < 3; i++) {
     float temp = sensors.getTempCByIndex(sensors_map[settings.sensor_map_id][i]);
-    if (temp < 50) {
+    if (temp > 50) {
       temp = 20;
     }
     lcd.print(temp, 1);     // display seconds elapsed since power-up
@@ -173,18 +174,18 @@ void logic() {
   }
 
   
-  Serial.println(t_outdoor);
-  Serial.println(settings.delta);
+  //Serial.println(t_outdoor);
+  //Serial.println(settings.delta);
   target_t = 43 - 0.8 * t_outdoor + settings.delta;
   
   if ( t_in + hysteresis < target_t ) {
-    Serial.println("POWER ON");
+    //Serial.println("POWER ON");
     //power_relay_on();
     diff_power_action(target_t-t_in);
     last_boiler_action=1;
     
   } else if ( t_in - hysteresis > target_t) {
-    Serial.println("POWER OFF");
+    //Serial.println("POWER OFF");
     power_relay_off();
     last_boiler_action=0;
   }
@@ -211,12 +212,12 @@ void diff_power_action(float delta_t){
 
 void relay_off(byte relay_id) {
   relay_state[relay_id] = false;
-  digitalWrite(relay_map[relay_id], HIGH);
+  digitalWrite(relay_map[relay_id], LOW);
 }
 
 void relay_on(byte relay_id) {
   relay_state[relay_id] = true;
-  digitalWrite(relay_map[relay_id], LOW);
+  digitalWrite(relay_map[relay_id], HIGH);
 }
 
 
@@ -236,7 +237,7 @@ void power_relay_off() {
 void process_key(int lcd_key) {
 
   last_keypress = millis();
-
+  
   switch (lcd_key)               // depending on which button was pushed, we perform an action
   {
     case btnRIGHT:
@@ -264,19 +265,16 @@ void process_key(int lcd_key) {
 }
 
 void shift_mode() {
-
   mode++;
-  if (mode > 3) {
-    mode ++;
+  if (mode > 1) {
+    mode = 0;
   }
-
 }
 
 void print_relay_status() {
   lcd.setCursor(0, 1);
   lcd.print("Head:");
   for (byte i = 0; i < 3; i++) {
-
     if (relay_state[i]) {
       lcd.print("[*]");
     } else {
