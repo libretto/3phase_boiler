@@ -2,7 +2,7 @@
 Arduino based control unit circuit and firmware
 
 # WARNING!!!  This code was created for my own test and study purposes and finally was implemented in DIY project for three phase 360V heater.
-# DISCLAIMER! Any reproducing of the unit and this code usage with high voltage devices is at your own risk!
+# DISCLAIMER! Any reproducing of the unit and usage it with high voltage devices is at your own risk!
 
 History of project: 
 I had cheap 12kW (360V) water heater in home climate system which had a problem with contactor frequently and I replaced it few times per season. 
