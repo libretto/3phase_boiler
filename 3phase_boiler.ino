@@ -67,7 +67,7 @@ volatile float delta;
 
 unsigned long previousMillis = 0;
 unsigned long logicMillis = 0;
-
+unsigned long pause_switch_logic_millis = 0; 
 Settings settings;
 
 DeviceAddress sensorDeviceAddress;
@@ -106,7 +106,7 @@ void setup()
   for (byte i = 0; i < 3; i++) {
     pinMode(relay_map[i], OUTPUT);
   }
-  power_relay_off();
+  all_relays_off();
 
 
   sensors.begin();
@@ -267,7 +267,7 @@ void ask() {
   last_button = 0;
   check_idle();
 
-  if (millis() - logicMillis > 10000) {
+  if (millis() - logicMillis > 2000) {
     logic();
     logicMillis = millis();
   }
@@ -391,58 +391,64 @@ void logic() {
   } else {
     t_watchdog = 0;
   }
-    
+
+  if (t_in - hysteresis * 2 > target_t || t_watchdog > 20) {
+    all_relays_off();
+    must_grow = false;
+    checkin(t_in);
+  }
+
+
+  if(pause_switch_logic_millis>millis()){ //
+    return; 
+  }
+  
   if (t_in < target_t - hysteresis) {
     must_grow = true;
-    diff_power_action_up();
-    last_temp_in = t_in;
+    power_up(t_in);
   }
 
   if (t_in > target_t + hysteresis) {
     must_grow = false;
-    diff_power_action_down();
-    last_temp_in = t_in;
+    power_down(t_in);
   }
 
   if ( t_in < target_t + hysteresis && t_in > target_t - hysteresis ) {
     if (must_grow && t_in < last_temp_in) {
-      diff_power_action_up();
-      last_temp_in = t_in;
-    }
+      power_up(t_in);
+  }
 
     if (!must_grow && t_in > last_temp_in) {
-      diff_power_action_down();
-      last_temp_in = t_in;
+      power_down(t_in);
     }
-  }
-  
-
-  if (t_in - hysteresis * 2 > target_t || t_watchdog > 20) {
-    power_relay_off();
-    must_grow = false;
-    last_temp_in = t_in;
   }
 }
 
-void diff_power_action_up() {
-  
+
+void power_up(float t_in) {
   for (byte i = 0; i < 3; i++) {
     if (!relay_state[i]) {
       relay_on(i);
       break;
     }
   }
+  checkin(t_in);
 }
 
-void diff_power_action_down() {
+void power_down(float t_in) {
   for (byte i = 3; i > 0; i--) {
     if (relay_state[i - 1]) {
       relay_off(i - 1);
       break;
     }
   }
+  checkin(t_in);
 }
 
+void checkin(float t_in){
+  last_temp_in = t_in;
+  pause_switch_logic_millis = millis() + 90000;  // next switch in 1.5 minute
+}
 void relay_off(byte relay_id) {
   relay_state[relay_id] = false;
   digitalWrite(relay_map[relay_id], LOW);
@@ -455,13 +461,13 @@ void relay_on(byte relay_id) {
 }
 
 
-void power_relay_on() {
+void all_relays_on() {
   for (byte i = 0; i < 3; i++) {
     relay_on(i);
   }
 };
 
-void power_relay_off() {
+void all_relays_off() {
   for (byte i = 0; i < 3; i++) {
     relay_off(i);
   }
