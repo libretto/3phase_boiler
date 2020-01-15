@@ -190,11 +190,11 @@ ISR(PCINT1_vect) {
 }
 
 
-void input(byte enc) {
+inline void  input(byte enc) {
   //Serial.println(enc);
   saved = true;
   last_keypress = millis();
-  timeout0 = millis();
+  timeout0 = last_keypress;
 
   if ((enc & ENCODER_DOWN ) == ENCODER_DOWN) {
     mode++;
@@ -234,7 +234,6 @@ void input(byte enc) {
       }
     }
   }
-  return;
 }
 
 int last_button;
@@ -272,7 +271,7 @@ void ask() {
     logicMillis = millis();
   }
 
-  if (millis() - previousMillis > timeout * 4 + 10000);
+  if (millis() - previousMillis > timeout * 4 + 10000)
   {
     for (int i = 0; i < 3; i++) {
       float temp_read = sensors.getTempCByIndex(i);
