@@ -7,12 +7,12 @@
 #include <DallasTemperature.h>
 #include <LiquidCrystal_I2C.h>
 
-/* 
-   DS1307RTC required for day-night feature of heating algorithm 
-   and it will not require ATMega328P board because of firmware memory consumption) 
+/*
+   DS1307RTC required for day-night feature of heating algorithm
+   and it will not require ATMega328P board because of firmware memory consumption)
 
 
-#include <TimeLib.h>  
+  #include <TimeLib.h>
   #include <Time.h>
   #include <DS1307RTC.h> */
 
@@ -67,7 +67,7 @@ volatile float delta;
 
 unsigned long previousMillis = 0;
 unsigned long logicMillis = 0;
-unsigned long pause_switch_logic_millis = 0; 
+unsigned long pause_switch_logic_millis = 0;
 Settings settings;
 
 DeviceAddress sensorDeviceAddress;
@@ -392,17 +392,17 @@ void logic() {
     t_watchdog = 0;
   }
 
-  if (t_in - hysteresis * 2 > target_t || t_watchdog > 20) {
+  if (t_in - hysteresis * 2 > target_t || t_watchdog > 60) {
     all_relays_off();
     must_grow = false;
     checkin(t_in);
   }
 
 
-  if(pause_switch_logic_millis>millis()){ //
-    return; 
+  if (pause_switch_logic_millis > millis()) { //
+    return;
   }
-  
+
   if (t_in < target_t - hysteresis) {
     must_grow = true;
     power_up(t_in);
@@ -414,9 +414,10 @@ void logic() {
   }
 
   if ( t_in < target_t + hysteresis && t_in > target_t - hysteresis ) {
+
     if (must_grow && t_in < last_temp_in) {
       power_up(t_in);
-  }
+    }
 
     if (!must_grow && t_in > last_temp_in) {
       power_down(t_in);
@@ -445,9 +446,15 @@ void power_down(float t_in) {
   checkin(t_in);
 }
 
-void checkin(float t_in){
+void checkin(float t_in) {
   last_temp_in = t_in;
-  pause_switch_logic_millis = millis() + 90000;  // next switch in 1.5 minute
+
+  // empirical heating timeouts
+  if (must_grow) {
+    pause_switch_logic_millis = millis() + 120000 + (t_in - target_t) * 20000 ;
+  } else {
+    pause_switch_logic_millis = millis() + 120000 + (target_t - t_in) * 20000;
+  }
 }
 void relay_off(byte relay_id) {
   relay_state[relay_id] = false;
