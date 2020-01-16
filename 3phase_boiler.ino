@@ -27,8 +27,9 @@ int relay_map[3] = {11, 10, 12}; // relay pins
 boolean relay_state[3];
 int t_watchdog = 0;
 unsigned long last_keypress = 0;
-
 unsigned long timeout0 = 0;
+unsigned long logic_delay = 0;
+
 byte print_mode_0 = 0;
 
 byte sensors_map[6][3] = {
@@ -46,6 +47,8 @@ float hysteresis = 2;
 float target_t;
 float last_temp_in = 0;
 boolean must_grow = true;
+boolean pause = false;
+
 
 int mode = INFO_MODE;
 int lcd_key     = 0;
@@ -115,17 +118,18 @@ void setup()
   //////Serial.println(sensors.getDeviceCount());
   //sensors.requestTemperatures();
 
-  sensors.getAddress(sensorDeviceAddress, 0);
-  printAddress(sensorDeviceAddress);
+  //sensors.getAddress(sensorDeviceAddress, 0);
+  //printAddress(sensorDeviceAddress);
   //sensors.setResolution(sensorDeviceAddress, SENSOR_RESOLUTION);
 
-  sensors.getAddress(sensorDeviceAddress, 1);
-  printAddress(sensorDeviceAddress);
+  //sensors.getAddress(sensorDeviceAddress, 1);
+  //printAddress(sensorDeviceAddress);
   //sensors.setResolution(sensorDeviceAddress, SENSOR_RESOLUTION);
-  sensors.getAddress(sensorDeviceAddress, 2);
-  printAddress(sensorDeviceAddress);
+  //sensors.getAddress(sensorDeviceAddress, 2);
+  //printAddress(sensorDeviceAddress);
   //sensors.setResolution(sensorDeviceAddress, SENSOR_RESOLUTION);
-
+  sensors.setWaitForConversion(false);
+  sensors.requestTemperatures();
 
   pinMode(A1, INPUT);
   pinMode(A2, INPUT);
@@ -240,7 +244,7 @@ int last_button;
 int timeout = 94 << (SENSOR_RESOLUTION - 9);
 
 void loop() {
-
+  
   print_mode();
   ask();
 
@@ -271,7 +275,7 @@ void ask() {
     logicMillis = millis();
   }
 
-  if (millis() - previousMillis > timeout * 4 + 10000)
+  if (millis() - previousMillis > timeout * 8)
   {
     for (int i = 0; i < 3; i++) {
       float temp_read = sensors.getTempCByIndex(i);
@@ -281,7 +285,7 @@ void ask() {
     }
     sensors.setWaitForConversion(false);
     sensors.requestTemperatures();
-    sensors.setWaitForConversion(true);
+    //sensors.setWaitForConversion(true);
     previousMillis = millis();
   }
 }
@@ -340,8 +344,8 @@ void print_temperature() {
   for (int i = 0; i < 3; i++) {
     int ssid = sensors_map[sensor_map_id][i];
     float temp = temperatures[ssid];
-    if (temp > 50) {
-      temp = 20;
+    if (temp > 99) {
+      temp = 99;
     }
     if (temp < -99) {
       temp = -99;
@@ -364,6 +368,7 @@ void check_idle() {
     }
   }
 }
+
 
 
 void logic() {
@@ -391,14 +396,14 @@ void logic() {
     t_watchdog = 0;
   }
 
-  if (t_in - hysteresis * 2 > target_t || t_watchdog > 60) {
+  if (t_in - hysteresis * 2 > target_t || t_watchdog > 90) {
     all_relays_off();
     must_grow = false;
     checkin(t_in);
   }
 
 
-  if (pause_switch_logic_millis > millis()) { //
+  if ( millis() - pause_switch_logic_millis < logic_delay ) { //
     return;
   }
 
@@ -448,11 +453,13 @@ void power_down(float t_in) {
 void checkin(float t_in) {
   last_temp_in = t_in;
 
-  // empirical heating timeouts
+  // empirical heating timeouts TODO
   if (must_grow) {
-    pause_switch_logic_millis = millis() + 120000 + (t_in - target_t) * 20000 ;
+    pause_switch_logic_millis = millis();
+    logic_delay = 180000;
   } else {
-    pause_switch_logic_millis = millis() + 120000 + (target_t - t_in) * 20000;
+    pause_switch_logic_millis = millis();
+    logic_delay = 180000;
   }
 }
 void relay_off(byte relay_id) {
