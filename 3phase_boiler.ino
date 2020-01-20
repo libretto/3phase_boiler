@@ -6,6 +6,7 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include <LiquidCrystal_I2C.h>
+#include <avr/wdt.h>
 
 /*
    DS1307RTC required for day-night feature of heating algorithm
@@ -139,6 +140,9 @@ void setup()
   digitalWrite(A3, HIGH);
   PCICR =  0b00000010;
   PCMSK1 = 0b00001110;
+  wdt_disable();
+  delay(3000);
+  wdt_enable(WDTO_2S);
 
 }
 
@@ -154,11 +158,16 @@ byte up = 0;
 byte isClick = 0;
 
 volatile byte reading = 0;
+volatile byte encoder_data;
+volatile boolean encoder_event = false;
 #define ENCODER_LEFT 0x01
 #define ENCODER_RIGHT 0x02
 #define ENCODER_DOWN 0x04
 
-// Work with Encoder
+int last_button;
+int timeout = 94 << (SENSOR_RESOLUTION - 9);
+
+// Encoder events by interrupt
 
 ISR(PCINT1_vect) {
 
@@ -179,24 +188,38 @@ ISR(PCINT1_vect) {
   if (seqA == 0b00001001 && seqB == 0b00000011)
   {
     enc |= ENCODER_RIGHT;
+    encoder_event = true;
   }
 
   if (seqA == 0b00000011 && seqB == 0b00001001)
   {
     enc |= ENCODER_LEFT;
+    encoder_event = true;
   }
 
   if (!C_val) {
     enc |= ENCODER_DOWN;
+    encoder_event = true;
   }
+  encoder_data = enc;
 
-  input(enc);
 }
 
 
+void loop() {
+  if (encoder_event)
+    input(encoder_data);
+
+  print_mode();
+  pass();
+  wdt_reset();
+}
+
 inline void  input(byte enc) {
   //Serial.println(enc);
+
   saved = true;
+  encoder_event = false;
   last_keypress = millis();
   timeout0 = last_keypress;
 
@@ -240,19 +263,9 @@ inline void  input(byte enc) {
   }
 }
 
-int last_button;
-int timeout = 94 << (SENSOR_RESOLUTION - 9);
-
-void loop() {
-  
-  print_mode();
-  ask();
-
-}
 
 
-void ask() {
-
+void pass() {
   if (sensor_map_id != settings.sensor_map_id) {
     settings.sensor_map_id = sensor_map_id;
     saved = false;
@@ -270,11 +283,6 @@ void ask() {
   last_button = 0;
   check_idle();
 
-  if (millis() - logicMillis > 2000) {
-    logic();
-    logicMillis = millis();
-  }
-
   if (millis() - previousMillis > timeout * 8)
   {
     for (int i = 0; i < 3; i++) {
@@ -287,6 +295,11 @@ void ask() {
     sensors.requestTemperatures();
     //sensors.setWaitForConversion(true);
     previousMillis = millis();
+  }
+
+  if (millis() - logicMillis > 2000) {
+    logic();
+    logicMillis = millis();
   }
 }
 
@@ -396,20 +409,19 @@ void logic() {
     t_watchdog = 0;
   }
 
-  if (t_in - hysteresis * 2 > target_t || t_watchdog > 90) {
+  if (t_in - hysteresis * 2 > target_t || t_watchdog > 1000) {
     all_relays_off();
     must_grow = false;
     checkin(t_in);
   }
 
-
-  if ( millis() - pause_switch_logic_millis < logic_delay ) { //
-    return;
-  }
-
   if (t_in < target_t - hysteresis) {
     must_grow = true;
     power_up(t_in);
+  }
+
+  if ( millis() - pause_switch_logic_millis < logic_delay ) { //
+    return;
   }
 
   if (t_in > target_t + hysteresis) {
