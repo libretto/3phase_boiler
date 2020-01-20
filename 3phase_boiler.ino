@@ -19,19 +19,22 @@
 
 #define ONE_WIRE_BUS 2
 
-#define INFO_MODE 0;
-#define SET_TEMPERATURE_MODE 1
-#define SET_RELAY_MODE 2
+#define TARGET_MODE 0
+#define STATUS_MODE 1
+#define LOG_MODE 2
+#define CONFIGURE_SENSORMAP_MODE 3
+#define MAX_MODE 3
+
 #define SENSOR_RESOLUTION 10
 
 int relay_map[3] = {11, 10, 12}; // relay pins
 boolean relay_state[3];
 int t_watchdog = 0;
 unsigned long last_keypress = 0;
-unsigned long timeout0 = 0;
+unsigned long mode_timeout = 0;
 unsigned long logic_delay = 0;
 
-byte print_mode_0 = 0;
+
 
 byte sensors_map[6][3] = {
   {0, 1, 2},
@@ -51,7 +54,8 @@ boolean must_grow = true;
 boolean pause = false;
 
 
-int mode = INFO_MODE;
+byte mode = TARGET_MODE;
+boolean draw_flag = false;
 int lcd_key     = 0;
 int adc_key_in  = 0;
 
@@ -207,8 +211,9 @@ ISR(PCINT1_vect) {
 
 
 void loop() {
-  if (encoder_event)
+  if (encoder_event) {
     input(encoder_data);
+  }
 
   print_mode();
   pass();
@@ -221,11 +226,11 @@ inline void  input(byte enc) {
   saved = true;
   encoder_event = false;
   last_keypress = millis();
-  timeout0 = last_keypress;
-
+  mode_timeout = last_keypress;
+  draw_flag = true;
   if ((enc & ENCODER_DOWN ) == ENCODER_DOWN) {
     mode++;
-    if (mode > 2) {
+    if (mode > MAX_MODE) {
       mode = 0;
     }
     return;
@@ -233,19 +238,19 @@ inline void  input(byte enc) {
   if ( enc == 0 ) {
     return;
   }
-  if (mode == 0) {
-    mode ++;
+  if (mode == STATUS_MODE || mode == LOG_MODE) {
+    mode = TARGET_MODE;
   }
 
-  if (mode == 1) {
-    print_mode_0 = 0;
+  if (mode == TARGET_MODE) {
     if ( (enc & ENCODER_LEFT) == ENCODER_LEFT ) {
       delta += 0.5;
     } else {
       delta -= 0.5;
     }
   }
-  if (mode == 2) {
+
+  if (mode == CONFIGURE_SENSORMAP_MODE) {
     if ( (enc & ENCODER_LEFT) == ENCODER_LEFT ) {
       if (sensor_map_id < 5) {
         sensor_map_id ++;
@@ -304,39 +309,39 @@ void pass() {
 }
 
 void print_mode() {
-
-  if (mode == 0) {
-    print_mode0();
+  if (draw_flag) {
+    if (mode == STATUS_MODE ) {
+      print_status();
+    }
+    if (mode == TARGET_MODE) {
+      print_target_t();
+    }
+    if (mode == CONFIGURE_SENSORMAP_MODE) {
+      print_sensormap();
+    }
+    if (mode == LOG_MODE) {
+      print_log();
+    }
+    draw_flag = false;
   }
-  if (mode == 1) {
-    print_mode_0 = 0;
-
-    print_mode1();
-  }
-  if (mode == 2) {
-    print_mode2();
-  }
-}
-
-void print_mode0() {
-  if (abs(millis() - timeout0) > 2000) {
-    timeout0 = millis();
-    print_mode_0 ^= 1;
-  }
-
-  if (print_mode_0 == 1) {
-    print_temperature();
-    print_relay_status();
-  } else {
-    print_target_t();
+  if (abs(millis() - mode_timeout) > 2000) {
+    mode_timeout = millis();
+    mode ++;
+    draw_flag = true;
+    if (mode > 2) {
+      mode = 0;
+    }
   }
 }
 
-void print_mode1() {
-  print_target_t();
+void print_status() {
+  print_temperature();
+  print_relay_status();
 }
 
-void print_mode2() {
+
+
+void print_sensormap() {
   lcd.setCursor(0, 0);
   lcd.print("In Out Outdr");
   lcd.setCursor(0, 1);           // move cursor to second line "1" and 9 spaces over
@@ -350,6 +355,20 @@ void print_mode2() {
     lcd.print(";");
   }
   lcd.print("   ");
+}
+
+void print_log() {
+  // want see uptime...
+  lcd.setCursor(0, 0);
+
+  lcd.print("Up:");
+  lcd.print((millis() / 3600000));
+  lcd.print("h         ");
+  lcd.setCursor(0, 1);
+  lcd.print(last_temp_in);
+  lcd.print(":");
+  lcd.print(t_watchdog);
+  lcd.print("    ");
 }
 
 void print_temperature() {
@@ -372,7 +391,6 @@ void print_temperature() {
 void check_idle() {
 
   if (abs(millis() - last_keypress) > 5000 ) {
-    mode = 0;
     if (!saved) {
       lcd.setCursor(0, 1);
       lcd.print("sav X ");
@@ -499,13 +517,6 @@ void all_relays_off() {
 };
 
 
-
-void shift_mode() {
-  mode++;
-  if (mode > 2) {
-    mode = 0;
-  }
-}
 
 void print_relay_status() {
 
